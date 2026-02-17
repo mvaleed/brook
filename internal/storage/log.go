@@ -213,10 +213,8 @@ func (l *Log) Append(payload []byte) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	offset := uint64(l.baseOffset) + uint64(l.nextOffset) // Global offset
-
 	header := RecordHeader{
-		LogicalOffset: offset,
+		LogicalOffset: uint64(l.nextOffset),
 		PayloadSize:   uint64(len(payload)),
 		Timestamp:     uint64(time.Now().UnixNano()),
 	}
@@ -303,6 +301,8 @@ func (l *Log) NextOffset() int64 {
 func (l *Log) FindRecord(targetLogicalOffset int64) (Record, error) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
+
+	targetLogicalOffset = targetLogicalOffset - l.baseOffset
 
 	baseIndexEntry, err := l.index.FindNearest(uint32(targetLogicalOffset))
 	if err != nil {

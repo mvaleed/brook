@@ -102,7 +102,7 @@ func NewPartition(dir string) (*Partition, error) {
 		return nil, err
 	}
 
-	nextOffset := baseOffsetForActiveLog + int(activeLog.nextOffset)
+	nextOffset := baseOffsetForActiveLog + int(activeLog.NextOffset())
 
 	p := &Partition{
 		dir:           dir,
@@ -121,7 +121,7 @@ func (p *Partition) rotate() error {
 		if err != nil {
 			return fmt.Errorf("error while closing active log: %w", err)
 		}
-		p.activeLogName = newLogNameFromInt(p.nextOffset + 1)
+		p.activeLogName = newLogNameFromInt(p.nextOffset)
 		baseOffsetForActiveLog := p.activeLogName.toInt()
 		newLogPath := filepath.Join(p.dir, p.activeLogName.string())
 

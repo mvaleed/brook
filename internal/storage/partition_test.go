@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -159,17 +160,41 @@ func TestPartition_Append(t *testing.T) {
 		err = p.Append([]byte("payload"))
 		require.NoError(t, err)
 
-		require.Equal(t, "000000000010001.log", p.activeLogName.string())
+		require.Equal(t, "000000000010000.log", p.activeLogName.string())
 		require.Len(t, p.segments, 2)
 		require.Equal(t, 0, p.segments[0].BaseOffset)
-		require.Equal(t, 10001, p.segments[1].BaseOffset)
+		require.Equal(t, 10000, p.segments[1].BaseOffset)
 
-		record, err := p.activeLog.FindRecord(10001)
+		record, err := p.activeLog.FindRecord(10000)
 		require.NoError(t, err)
 
 		require.Equal(t, 7, int(record.Header.PayloadSize))
 		require.Equal(t, "payload", string(record.Payload))
 	})
+	// t.Run("verity multiple rotates", func(t *testing.T) {
+	// 	partitionDir := filepath.Join(t.TempDir(), "partition/")
+	//
+	// 	p, err := NewPartition(partitionDir)
+	// 	require.NoError(t, err)
+	// 	require.NotNil(t, p)
+	//
+	// 	for i := range 30103 {
+	// 		data, err := GenerateRandomBytes(i + 1 + 100)
+	// 		require.NoError(t, err)
+	//
+	// 		err = p.Append(data)
+	// 		require.NoError(t, err)
+	//
+	// 	}
+	//
+	// 	require.Equal(t, "000000000030000.log", p.activeLogName.string())
+	// 	require.Len(t, p.segments, 4)
+	//
+	// 	logsAndIndex, err := os.ReadDir(partitionDir)
+	// 	require.NoError(t, err)
+	//
+	// 	logsAndIndexNames := make()
+	// })
 }
 
 func TestPartition_Read(t *testing.T) {
@@ -185,7 +210,6 @@ func TestPartition_Read(t *testing.T) {
 		require.NoError(t, err)
 
 		data2 := []byte("hello 2")
-
 		err = p.Append(data2)
 		require.NoError(t, err)
 
@@ -196,6 +220,58 @@ func TestPartition_Read(t *testing.T) {
 		record, err = p.Read(1)
 		require.NoError(t, err)
 		require.Equal(t, data2, record.Payload)
+	})
+	t.Run("multi-log partition read", func(t *testing.T) {
+		partitionDir := filepath.Join(t.TempDir(), "partition/")
+
+		p, err := NewPartition(partitionDir)
+		require.NoError(t, err)
+		require.NotNil(t, p)
+
+		var lastDataAdded []byte
+		var lastEntryIdx int
+		for i := range 30100 {
+			data := fmt.Appendf(nil, "data %d", i)
+			err = p.Append(data)
+			require.NoError(t, err)
+			lastDataAdded = data
+			lastEntryIdx = i
+		}
+
+		record, err := p.Read(0)
+		require.NoError(t, err)
+		require.Equal(t, "data 0", string(record.Payload))
+
+		record, err = p.Read(1010)
+		require.NoError(t, err)
+		require.Equal(t, "data 1010", string(record.Payload))
+
+		record, err = p.Read(9999)
+		require.NoError(t, err)
+		require.Equal(t, "data 9999", string(record.Payload))
+
+		record, err = p.Read(10101)
+		require.NoError(t, err)
+		require.Equal(t, "data 10101", string(record.Payload))
+
+		record, err = p.Read(10901)
+		require.NoError(t, err)
+		require.Equal(t, "data 10901", string(record.Payload))
+
+		record, err = p.Read(20901)
+		require.NoError(t, err)
+		require.Equal(t, "data 20901", string(record.Payload))
+
+		record, err = p.Read(30099)
+		require.NoError(t, err)
+		require.Equal(t, "data 30099", string(record.Payload))
+
+		record, err = p.Read(lastEntryIdx)
+		require.NoError(t, err)
+		require.Equal(t, string(lastDataAdded), string(record.Payload))
+
+		record, err = p.Read(lastEntryIdx + 1)
+		require.Error(t, err)
 	})
 	// TODO: add more complicated tests
 }
